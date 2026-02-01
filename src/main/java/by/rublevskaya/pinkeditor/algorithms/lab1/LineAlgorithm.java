@@ -1,4 +1,4 @@
-package by.rublevskaya.pinkeditor.algorithms;
+package by.rublevskaya.pinkeditor.algorithms.lab1;
 
 import by.rublevskaya.pinkeditor.model.Pixel;
 

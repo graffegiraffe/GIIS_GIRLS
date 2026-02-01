@@ -1,4 +1,4 @@
-package by.rublevskaya.pinkeditor.algorithms;
+package by.rublevskaya.pinkeditor.algorithms.lab1;
 
 public enum AlgorithmType {
     DDA("DDA"),
