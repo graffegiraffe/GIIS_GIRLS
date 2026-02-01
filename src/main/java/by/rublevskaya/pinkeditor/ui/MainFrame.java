@@ -8,7 +8,7 @@ import java.awt.*;
 public class MainFrame extends JFrame {
 
     public MainFrame() {
-        setTitle("Pink Graphic Editor | Labs 1-2");
+        setTitle("Pink Graphic Editor | Dasha and Kate");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1300, 850);
         setLocationRelativeTo(null);
