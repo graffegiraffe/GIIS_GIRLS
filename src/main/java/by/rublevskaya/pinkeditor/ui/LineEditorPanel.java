@@ -1,10 +1,6 @@
 package by.rublevskaya.pinkeditor.ui;
 
-import by.rublevskaya.pinkeditor.algorithms.lab1.AlgorithmType;
-import by.rublevskaya.pinkeditor.algorithms.lab1.BresenhamAlgorithm;
-import by.rublevskaya.pinkeditor.algorithms.lab1.DDAAlgorithm;
-import by.rublevskaya.pinkeditor.algorithms.lab1.LineAlgorithm;
-import by.rublevskaya.pinkeditor.algorithms.lab1.WuAlgorithm;
+import by.rublevskaya.pinkeditor.algorithms.lab1.*;
 import by.rublevskaya.pinkeditor.model.Pixel;
 import by.rublevskaya.pinkeditor.ui.components.StyledButton;
 import by.rublevskaya.pinkeditor.util.Theme;
@@ -17,7 +13,9 @@ import javax.swing.table.JTableHeader;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Vector;
 
 public class LineEditorPanel extends JPanel {
     private DrawingPanel canvas;
@@ -28,6 +26,7 @@ public class LineEditorPanel extends JPanel {
     private Point startPoint = null;
     private Point endPoint = null;
 
+    private Timer animationTimer;
     public LineEditorPanel() {
         setLayout(new BorderLayout());
         setBackground(Theme.BG_COLOR);
@@ -49,7 +48,7 @@ public class LineEditorPanel extends JPanel {
         algoSelector.setBackground(Color.WHITE);
         algoSelector.setFont(Theme.MAIN_FONT);
 
-        debugModeCheck = new JCheckBox("Сетка (Отладка)");
+        debugModeCheck = new JCheckBox("Сетка");
         debugModeCheck.setFont(Theme.BOLD_FONT);
         debugModeCheck.setForeground(Theme.TEXT_COLOR);
         debugModeCheck.setBackground(Color.WHITE);
@@ -60,7 +59,11 @@ public class LineEditorPanel extends JPanel {
 
         JButton manualInputBtn = new StyledButton("Ввод координат");
         manualInputBtn.setBackground(new Color(255, 228, 225));
-        manualInputBtn.addActionListener(e -> showManualInputDialog());
+        manualInputBtn.addActionListener(e -> showManualInputDialog(false));
+
+        JButton debugBtn = new StyledButton("ОТЛАДКА");
+        debugBtn.setBackground(new Color(255, 200, 220));
+        debugBtn.addActionListener(e -> showManualInputDialog(true));
 
         JButton clearBtn = new StyledButton("ОЧИСТИТЬ");
         clearBtn.setBackground(Theme.ACCENT_COLOR);
@@ -73,6 +76,8 @@ public class LineEditorPanel extends JPanel {
         toolbar.add(debugModeCheck);
         toolbar.add(Box.createHorizontalStrut(20));
         toolbar.add(manualInputBtn);
+        toolbar.add(Box.createHorizontalStrut(10));
+        toolbar.add(debugBtn);
         toolbar.add(Box.createHorizontalGlue());
         toolbar.add(clearBtn);
 
@@ -85,6 +90,10 @@ public class LineEditorPanel extends JPanel {
         MouseAdapter mouseHandler = new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
+                if (animationTimer != null && animationTimer.isRunning()) {
+                    animationTimer.stop();
+                }
+
                 if (startPoint == null) {
                     startPoint = canvas.toGridPoint(e.getPoint());
                     tableModel.setRowCount(0);
@@ -107,12 +116,14 @@ public class LineEditorPanel extends JPanel {
                 }
             }
         };
+
         canvas.addMouseListener(mouseHandler);
         canvas.addMouseMotionListener(mouseHandler);
 
         String[] columns = {"Шаг", "X", "Y", "Ошибка", "Plot", "I"};
         tableModel = new DefaultTableModel(columns, 0);
-        JTable logTable = new JTable(tableModel);
+
+        logTable = new JTable(tableModel);
         logTable.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         logTable.setRowHeight(25);
 
@@ -136,6 +147,9 @@ public class LineEditorPanel extends JPanel {
     }
 
     private void resetState() {
+        if (animationTimer != null && animationTimer.isRunning()) {
+            animationTimer.stop();
+        }
         startPoint = null;
         endPoint = null;
         canvas.clear();
@@ -146,23 +160,80 @@ public class LineEditorPanel extends JPanel {
         if (startPoint == null || endPoint == null) return;
         tableModel.setRowCount(0);
 
+        configureTableColumns();
+
+        LineAlgorithm algorithm = getSelectedAlgorithm();
+        List<Pixel> pixels = algorithm.calculate(startPoint.x, startPoint.y, endPoint.x, endPoint.y, tableModel);
+        canvas.setPixels(pixels);
+    }
+
+    private void startAnimation(int x1, int y1, int x2, int y2) {
+
+        resetState();
+        configureTableColumns();
+        LineAlgorithm algorithm = getSelectedAlgorithm();
+
+        DefaultTableModel tempModel = new DefaultTableModel();
+        for (int i = 0; i < tableModel.getColumnCount(); i++) {
+            tempModel.addColumn(tableModel.getColumnName(i));
+        }
+
+        List<Pixel> fullPixelList = algorithm.calculate(x1, y1, x2, y2, tempModel);
+
+        final int[] currentIndex = {0};
+        List<Pixel> currentPixels = new ArrayList<>();
+
+        animationTimer = new Timer(200, e -> {
+            if (currentIndex[0] < fullPixelList.size()) {
+                currentPixels.add(fullPixelList.get(currentIndex[0]));
+                canvas.setPixels(currentPixels);
+
+                if (currentIndex[0] < tempModel.getRowCount()) {
+                    Vector rowData = (Vector) tempModel.getDataVector().get(currentIndex[0]);
+                    Vector newRow = new Vector(rowData);
+                    tableModel.addRow(newRow);
+
+                    logTable.scrollRectToVisible(logTable.getCellRect(logTable.getRowCount() - 1, 0, true));
+                }
+
+                currentIndex[0]++;
+            } else {
+                while (currentIndex[0] < tempModel.getRowCount()) {
+                    Vector rowData = (Vector) tempModel.getDataVector().get(currentIndex[0]);
+                    tableModel.addRow(new Vector(rowData));
+                    currentIndex[0]++;
+                }
+                ((Timer) e.getSource()).stop();
+            }
+        });
+        animationTimer.start();
+    }
+
+    private void configureTableColumns() {
         AlgorithmType type = (AlgorithmType) algoSelector.getSelectedItem();
-        LineAlgorithm algorithm = switch (type) {
+        if (type == AlgorithmType.BRESENHAM) {
+            tableModel.setColumnIdentifiers(new String[]{"i", "e", "x", "y", "e'", "Plot (x,y)"});
+        } else {
+            tableModel.setColumnIdentifiers(new String[]{"Шаг", "X", "Y", "Ошибка", "Plot", "Интенс."});
+        }
+    }
+
+    private LineAlgorithm getSelectedAlgorithm() {
+        AlgorithmType type = (AlgorithmType) algoSelector.getSelectedItem();
+        return switch (type) {
             case DDA -> new DDAAlgorithm();
             case BRESENHAM -> new BresenhamAlgorithm();
             case WU -> new WuAlgorithm();
             default -> new DDAAlgorithm();
         };
-
-        List<Pixel> pixels = algorithm.calculate(startPoint.x, startPoint.y, endPoint.x, endPoint.y, tableModel);
-        canvas.setPixels(pixels);
     }
 
-    private void showManualInputDialog() {
-        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Координаты линии", true);
+    private void showManualInputDialog(boolean isDebug) {
+        String title = isDebug ? "Ввод координат (ОТЛАДКА)" : "Ввод координат";
+        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), title, true);
         dialog.setLayout(new GridBagLayout());
         dialog.getContentPane().setBackground(Theme.BG_COLOR);
-        dialog.setSize(350, 250);
+        dialog.setSize(350, 280);
         dialog.setLocationRelativeTo(this);
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -177,14 +248,25 @@ public class LineEditorPanel extends JPanel {
         addInputRow(dialog, gbc, 2, "X2:", x2F);
         addInputRow(dialog, gbc, 3, "Y2:", y2F);
 
-        JButton drawBtn = new StyledButton("Нарисовать");
+        JButton drawBtn = new StyledButton(isDebug ? "Запустить" : "Нарисовать");
+        if (isDebug) drawBtn.setBackground(new Color(255, 200, 220));
+
         drawBtn.addActionListener(e -> {
             try {
-                startPoint = new Point(Integer.parseInt(x1F.getText()), Integer.parseInt(y1F.getText()));
-                endPoint = new Point(Integer.parseInt(x2F.getText()), Integer.parseInt(y2F.getText()));
-                recalcLine();
-                startPoint = null; endPoint = null;
-                canvas.repaint();
+                int x1 = Integer.parseInt(x1F.getText());
+                int y1 = Integer.parseInt(y1F.getText());
+                int x2 = Integer.parseInt(x2F.getText());
+                int y2 = Integer.parseInt(y2F.getText());
+
+                if (isDebug) {
+                    startAnimation(x1, y1, x2, y2);
+                } else {
+                    startPoint = new Point(x1, y1);
+                    endPoint = new Point(x2, y2);
+                    recalcLine();
+                    startPoint = null; endPoint = null;
+                    canvas.repaint();
+                }
                 dialog.dispose();
             } catch (Exception ex) { JOptionPane.showMessageDialog(dialog, "Ошибка ввода!"); }
         });

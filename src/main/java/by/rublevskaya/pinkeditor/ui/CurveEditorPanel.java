@@ -13,10 +13,13 @@ import javax.swing.table.JTableHeader;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Vector;
 
 public class CurveEditorPanel extends JPanel {
     private DrawingPanel canvas;
+    private JTable logTable; // ИСПРАВЛЕНО: Теперь это поле класса
     private DefaultTableModel tableModel;
     private JComboBox<CurveType> curveSelector;
     private JCheckBox debugModeCheck;
@@ -25,6 +28,7 @@ public class CurveEditorPanel extends JPanel {
     private JTextField param2Field;
     private JLabel param1Label;
     private JLabel param2Label;
+    private Timer animationTimer;
 
     public CurveEditorPanel() {
         setLayout(new BorderLayout());
@@ -70,15 +74,25 @@ public class CurveEditorPanel extends JPanel {
         debugModeCheck.setFont(Theme.BOLD_FONT);
         debugModeCheck.setForeground(Theme.TEXT_COLOR);
         debugModeCheck.setBackground(Color.WHITE);
-        debugModeCheck.addActionListener(e -> canvas.setDebugMode(debugModeCheck.isSelected()));
+        debugModeCheck.addActionListener(e -> {
+            canvas.setDebugMode(debugModeCheck.isSelected());
+            stopAnimation();
+            canvas.clear();
+            tableModel.setRowCount(0);
+        });
 
         JButton manualInputBtn = new StyledButton("Ввод параметров");
         manualInputBtn.setBackground(new Color(255, 228, 225));
-        manualInputBtn.addActionListener(e -> showManualInputDialog());
+        manualInputBtn.addActionListener(e -> showManualInputDialog(false));
+
+        JButton debugBtn = new StyledButton("ОТЛАДКА");
+        debugBtn.setBackground(new Color(255, 200, 220));
+        debugBtn.addActionListener(e -> showManualInputDialog(true));
 
         JButton clearBtn = new StyledButton("ОЧИСТИТЬ");
         clearBtn.setBackground(Theme.ACCENT_COLOR);
         clearBtn.addActionListener(e -> {
+            stopAnimation();
             canvas.clear();
             tableModel.setRowCount(0);
         });
@@ -91,6 +105,8 @@ public class CurveEditorPanel extends JPanel {
         toolbar.add(debugModeCheck);
         toolbar.add(Box.createHorizontalStrut(10));
         toolbar.add(manualInputBtn);
+        toolbar.add(Box.createHorizontalStrut(5));
+        toolbar.add(debugBtn);
         toolbar.add(Box.createHorizontalGlue());
         toolbar.add(clearBtn);
 
@@ -125,6 +141,7 @@ public class CurveEditorPanel extends JPanel {
         canvas.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
+                stopAnimation();
                 Point center = canvas.toGridPoint(e.getPoint());
                 try {
                     int p1 = Integer.parseInt(param1Field.getText());
@@ -140,13 +157,14 @@ public class CurveEditorPanel extends JPanel {
         String[] columns = {"Шаг", "Del_i", "d", "d*", "Пиксель", "X", "Y", "Del_i+1", "Plot (x, y)"};
         tableModel = new DefaultTableModel(columns, 0);
 
-        JTable logTable = new JTable(tableModel);
+        // ИСПРАВЛЕНО: Инициализация поля класса, а не локальной переменной
+        logTable = new JTable(tableModel);
         logTable.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         logTable.setRowHeight(25);
 
-        logTable.getColumnModel().getColumn(0).setPreferredWidth(35); // Шаг
-        logTable.getColumnModel().getColumn(4).setPreferredWidth(50); // Пиксель
-        logTable.getColumnModel().getColumn(8).setPreferredWidth(80); // Plot
+        logTable.getColumnModel().getColumn(0).setPreferredWidth(35);
+        logTable.getColumnModel().getColumn(4).setPreferredWidth(50);
+        logTable.getColumnModel().getColumn(8).setPreferredWidth(80);
 
         JTableHeader header = logTable.getTableHeader();
         header.setFont(Theme.HEADER_FONT);
@@ -156,7 +174,7 @@ public class CurveEditorPanel extends JPanel {
         JScrollPane scrollPane = new JScrollPane(logTable);
         scrollPane.setBorder(BorderFactory.createTitledBorder(
                 BorderFactory.createLineBorder(Theme.ACCENT_COLOR, 2),
-                "Красивая таблица", TitledBorder.CENTER, TitledBorder.TOP, Theme.HEADER_FONT, Theme.ACCENT_COLOR
+                "Таблица (как в методичке)", TitledBorder.CENTER, TitledBorder.TOP, Theme.HEADER_FONT, Theme.ACCENT_COLOR
         ));
         scrollPane.setPreferredSize(new Dimension(550, 0));
         scrollPane.getViewport().setBackground(Color.WHITE);
@@ -167,8 +185,15 @@ public class CurveEditorPanel extends JPanel {
         add(splitPane, BorderLayout.CENTER);
     }
 
-    private void showManualInputDialog() {
-        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Параметры кривой", true);
+    private void stopAnimation() {
+        if (animationTimer != null && animationTimer.isRunning()) {
+            animationTimer.stop();
+        }
+    }
+
+    private void showManualInputDialog(boolean isDebug) {
+        String title = isDebug ? "Параметры (ОТЛАДКА)" : "Параметры кривой";
+        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), title, true);
         dialog.setLayout(new GridBagLayout());
         dialog.getContentPane().setBackground(Theme.BG_COLOR);
         dialog.setSize(350, 300);
@@ -194,7 +219,9 @@ public class CurveEditorPanel extends JPanel {
             addInputRow(dialog, gbc, 3, "Полуось B:", p2Field);
         }
 
-        JButton drawBtn = new StyledButton("Построить");
+        JButton drawBtn = new StyledButton(isDebug ? "Запустить" : "Построить");
+        if (isDebug) drawBtn.setBackground(new Color(255, 200, 220));
+
         drawBtn.addActionListener(e -> {
             try {
                 int xc = Integer.parseInt(xcField.getText());
@@ -205,13 +232,17 @@ public class CurveEditorPanel extends JPanel {
                 param1Field.setText(String.valueOf(p1));
                 if(showP2) param2Field.setText(String.valueOf(p2));
 
-                canvas.clear();
-                tableModel.setRowCount(0);
-                drawCurve(xc, yc, p1, p2);
-                canvas.repaint();
+                if (isDebug) {
+                    startAnimation(xc, yc, p1, p2);
+                } else {
+                    canvas.clear();
+                    tableModel.setRowCount(0);
+                    drawCurve(xc, yc, p1, p2);
+                    canvas.repaint();
+                }
                 dialog.dispose();
             } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(dialog, "Введите целые числа!ПОНЯЛИ??", "Ошибка", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(dialog, "Введите целые числа!", "Ошибка", JOptionPane.ERROR_MESSAGE);
             }
         });
 
@@ -230,16 +261,73 @@ public class CurveEditorPanel extends JPanel {
     private void drawCurve(int xc, int yc, int p1, int p2) {
         CurveType type = (CurveType) curveSelector.getSelectedItem();
         int[] params = {p1, p2};
+        CurveAlgorithm algorithm = getAlgorithm(type);
+        List<Pixel> pixels = algorithm.calculate(xc, yc, params, tableModel);
+        canvas.setPixels(pixels);
+    }
 
-        CurveAlgorithm algorithm = switch (type) {
+    private CurveAlgorithm getAlgorithm(CurveType type) {
+        return switch (type) {
             case CIRCLE -> new CircleAlgorithm();
             case ELLIPSE -> new EllipseAlgorithm();
             case HYPERBOLA -> new HyperbolaAlgorithm();
             case PARABOLA -> new ParabolaAlgorithm();
         };
+    }
 
-        Graphics2D g2 = (Graphics2D) canvas.getGraphics();
-        List<Pixel> pixels = algorithm.calculate(xc, yc, params, tableModel);
-        canvas.setPixels(pixels);
+    private void startAnimation(int xc, int yc, int p1, int p2) {
+        stopAnimation();
+        canvas.clear();
+        tableModel.setRowCount(0);
+
+        CurveType type = (CurveType) curveSelector.getSelectedItem();
+        int[] params = {p1, p2};
+        CurveAlgorithm algorithm = getAlgorithm(type);
+
+        DefaultTableModel tempModel = new DefaultTableModel();
+        for (int i = 0; i < tableModel.getColumnCount(); i++) {
+            tempModel.addColumn(tableModel.getColumnName(i));
+        }
+        List<Pixel> allPixels = algorithm.calculate(xc, yc, params, tempModel);
+
+        final int[] rowIndex = {0};
+        final int[] pixelIndex = {0};
+        int totalRows = tempModel.getRowCount();
+        int totalPixels = allPixels.size();
+
+        int pixelsPerStep = (totalRows > 0) ? (int)Math.ceil((double)totalPixels / totalRows) : totalPixels;
+
+        List<Pixel> currentPixels = new ArrayList<>();
+
+        animationTimer = new Timer(50, e -> {
+            if (rowIndex[0] < totalRows) {
+                Vector rowData = (Vector) tempModel.getDataVector().get(rowIndex[0]);
+                tableModel.addRow(new Vector(rowData));
+
+                int limit = Math.min(pixelIndex[0] + pixelsPerStep, totalPixels);
+                for (int i = pixelIndex[0]; i < limit; i++) {
+                    currentPixels.add(allPixels.get(i));
+                }
+                pixelIndex[0] = limit;
+
+                canvas.setPixels(currentPixels);
+
+                // ИСПРАВЛЕНО: Теперь logTable виден и ошибки нет
+                if (logTable != null) {
+                    logTable.scrollRectToVisible(logTable.getCellRect(logTable.getRowCount() - 1, 0, true));
+                }
+
+                rowIndex[0]++;
+            } else {
+                if (pixelIndex[0] < totalPixels) {
+                    for (int i = pixelIndex[0]; i < totalPixels; i++) {
+                        currentPixels.add(allPixels.get(i));
+                    }
+                    canvas.setPixels(currentPixels);
+                }
+                ((Timer)e.getSource()).stop();
+            }
+        });
+        animationTimer.start();
     }
 }
