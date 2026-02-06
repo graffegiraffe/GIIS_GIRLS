@@ -19,7 +19,7 @@ import java.util.Vector;
 
 public class CurveEditorPanel extends JPanel {
     private DrawingPanel canvas;
-    private JTable logTable; // ИСПРАВЛЕНО: Теперь это поле класса
+    private JTable logTable;
     private DefaultTableModel tableModel;
     private JComboBox<CurveType> curveSelector;
     private JCheckBox debugModeCheck;
@@ -157,7 +157,6 @@ public class CurveEditorPanel extends JPanel {
         String[] columns = {"Шаг", "Del_i", "d", "d*", "Пиксель", "X", "Y", "Del_i+1", "Plot (x, y)"};
         tableModel = new DefaultTableModel(columns, 0);
 
-        // ИСПРАВЛЕНО: Инициализация поля класса, а не локальной переменной
         logTable = new JTable(tableModel);
         logTable.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         logTable.setRowHeight(25);
@@ -312,7 +311,6 @@ public class CurveEditorPanel extends JPanel {
 
                 canvas.setPixels(currentPixels);
 
-                // ИСПРАВЛЕНО: Теперь logTable виден и ошибки нет
                 if (logTable != null) {
                     logTable.scrollRectToVisible(logTable.getCellRect(logTable.getRowCount() - 1, 0, true));
                 }
