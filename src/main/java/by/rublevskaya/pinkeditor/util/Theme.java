@@ -11,4 +11,5 @@ public class Theme {
     public static final Font MAIN_FONT = new Font("Segoe UI", Font.PLAIN, 16);
     public static final Font BOLD_FONT = new Font("Segoe UI", Font.BOLD, 16);
     public static final Font HEADER_FONT = new Font("Segoe UI", Font.BOLD, 18);
+    public static final Font SMALL_FONT = new Font("Segoe UI", Font.PLAIN, 11);
 }

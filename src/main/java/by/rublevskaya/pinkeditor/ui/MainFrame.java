@@ -21,8 +21,8 @@ public class MainFrame extends JFrame {
         tabbedPane.setBackground(Color.WHITE);
 
         tabbedPane.addTab("Отрезки (Lab 1)", new LineEditorPanel());
-        tabbedPane.addTab("Кривые (Lab 2)", new CurveEditorPanel());
-
+        tabbedPane.addTab("Кривые 2-го порядка (Lab 2)", new CurveEditorPanel());
+        tabbedPane.addTab("Параметрические кривые (Lab 3)", new ParametricCurveEditorPanel());
         add(tabbedPane, BorderLayout.CENTER);
 
         setVisible(true);
