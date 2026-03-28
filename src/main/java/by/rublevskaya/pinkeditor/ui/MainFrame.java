@@ -25,6 +25,7 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Параметрические кривые (Lab 3)", new ParametricCurveEditorPanel());
         tabbedPane.addTab("3D Преобразования (Lab 4)", new Transform3DEditorPanel());
         tabbedPane.addTab("Заполнение полигонов (Lab 5)", new PolygonFillEditorPanel());
+        tabbedPane.addTab("Невидимые линии/грани (Lab 8)", new HiddenLineEditorPanel());
         add(tabbedPane, BorderLayout.CENTER);
 
         setVisible(true);
